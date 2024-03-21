@@ -1,0 +1,72 @@
+﻿@using Microsoft.Extensions.Options 
+@using RSSApp.Extensions;
+@inject IOptions<ApplicationSettings> _settings; 
+@{
+    ViewData["Title"] = "Feeds"; // Setting view title
+    Layout = "~/Views/Shared/_Layout.cshtml"; // Setting layout
+}
+
+<div id="div_Component_NewsFeeds">
+    @await Component.InvokeAsync("NewsFeeds") 
+</div>
+
+@section Scripts {
+    <script>
+
+        // Setting up timer based on configuration settings
+        document.getElementById('timer').innerHTML =
+        @_settings.Value.ReloadTime + ":" + 00;
+        startTimer();
+
+        // Function to start the timer
+        function startTimer() {
+            var presentTime = document.getElementById('timer').innerHTML;
+            var timeArray = presentTime.split(/[:]+/);
+            var m = timeArray[0];
+            var s = checkSecond((timeArray[1] - 1));
+
+            // Handling minute and second calculation
+            if (s == 59) {
+                m = m - 1
+            }
+
+            if (m == 0 && s == "00") {
+                ReloadNewsFeedsList(); // Reloading news feeds when timer expires
+            }
+            else {
+                document.getElementById('timer').innerHTML =
+                    m + ":" + s;
+
+                setTimeout(startTimer, 1000); // Setting timeout to call startTimer function every second
+            }
+
+        }
+
+        // Function to format seconds
+        function checkSecond(sec) {
+            if (sec < 10 && sec >= 0) { sec = "0" + sec }; // Adding zero in front of single-digit seconds
+            if (sec < 0) { sec = "59" }; // Handling negative seconds
+            return sec;
+        }
+
+        // Function to refresh the list
+        function RefreshList() {
+            ReloadNewsFeedsList(); // Reloading news feeds list
+        }
+
+        // Function to reload news feeds list via AJAX call
+        function ReloadNewsFeedsList() {
+            $.ajax({
+                url: '@Url.Action("ReloadNewsFeedsList", "Home")', // URL to the action method for reloading news feeds
+                data: "",
+                success: function (data) {
+                    $("#div_Component_NewsFeeds").html(data); // Updating the div with refreshed news feeds
+                    alert("Data are successfully Refresh !");
+                    document.getElementById('timer').innerHTML =
+        @_settings.Value.ReloadTime + ":" + 00; // Resetting the timer
+                    startTimer(); // Restarting the timer
+                }
+            })
+        }
+    </script>
+}

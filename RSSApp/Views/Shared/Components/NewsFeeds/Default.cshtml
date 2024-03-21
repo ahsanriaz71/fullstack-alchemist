@@ -1,0 +1,101 @@
+﻿@using Microsoft.Extensions.Options 
+@using System.ServiceModel.Syndication; 
+@using RSSApp.Extensions; 
+@using RSSApp.Extensions.EmailServices; 
+@inject IOptions<ApplicationSettings> _settings; 
+@inject IHttpContextAccessor Accessor;
+@inject IEmailkitService _emailkitManager;
+@model SyndicationFeed; 
+
+@{
+    // Initializing necessary variables and retrieving session data
+    List<SyndicationItem> syndicationItemList = new List<SyndicationItem>();
+    List<SyndicationItem> syndicationItemListChecks = new List<SyndicationItem>();
+    string[] KeyWordsArray = _settings.Value.KeyWords.Split(",");
+    string[] LebelsArray = _settings.Value.Lebels.Split(",");
+
+    string _session_Key_RequestDatetime = "RequestDatetime";
+    var reqDate = Accessor.HttpContext.Session.GetString(_session_Key_RequestDatetime);
+    string _session_Key_LastRecordDatetime = "LastRecordDatetime";
+    var lastRecordDate = Accessor.HttpContext.Session.GetString(_session_Key_LastRecordDatetime);
+
+    string _session_Key_LastRecordCompersionDatetime = "LastRecordCompersionDatetime";
+    var lastRecordCompersionDate = Accessor.HttpContext.Session.GetString(_session_Key_LastRecordCompersionDatetime);
+}
+
+<!-- Displaying request and record times -->
+<div><span id="timer"></span></div>
+<p>Request Time: @reqDate</p>
+<p>Last Record Time: @lastRecordDate</p>
+<p>Last Record Compersion Time: @lastRecordCompersionDate</p>
+
+<!-- Displaying SyndicationFeed data in a card format -->
+<div class="card" style="width: 77rem;">
+    @{
+        if (@Model.ImageUrl != null)
+        {
+            <!-- Displaying feed image if available -->
+
+            <img class="card-img-top" src="@Model.ImageUrl.AbsoluteUri" alt="Card image cap"> 
+        }
+    }
+
+    <div class="card-body">
+        <!--  Displaying feed title -->
+
+        <h5 class="card-title">@Model.Title.Text</h5> 
+        <p class="card-text">@Model.Description.Text</p> 
+    </div>
+    <ul class="list-group list-group-flush">
+        <li class="list-group-item"><b>Build Date:</b> @Model.LastUpdatedTime.ToString()</li>
+        <li class="list-group-item"><b>Generator: @Model.Generator.ToString()</b></li> 
+        <li class="list-group-item"><b>Copyright: @Model.Copyright.Text.ToString()</b></li> 
+    </ul>
+    <div class="card-body">
+        <!-- Refresh button -->
+        <a href="JavaScript:void(0);" onclick="RefreshList();" class="btn btn-primary">Refresh</a> 
+
+        <!-- Displaying feed link -->
+        <a href="@Model.Links.FirstOrDefault().Uri.AbsoluteUri" class="card-link">@Model.Links.FirstOrDefault().Uri.AbsoluteUri</a> 
+    </div>
+</div>
+
+@{
+    int rowCount = 0;
+    // Iterating over SyndicationItems to display each item in a collapsible format
+    foreach (var item in Model.Items.OrderByDescending(a => a.PublishDate))
+    {
+        rowCount = rowCount + 1;
+        string lebel = "";
+        if (!String.IsNullOrEmpty(lastRecordCompersionDate))
+        {
+            // Checking if item is newer than the last comparison date
+            DateTimeOffset lastCompersiondatetimeoff = DateTimeOffsetHelper.FromString(lastRecordCompersionDate);
+            if (lastCompersiondatetimeoff < item.PublishDate)
+            {
+                lebel = "New";
+                syndicationItemListChecks.Add(item);
+                // Checking if keywords match and adding to syndicationItemList
+                bool ismatch = CommonFunctions.KeyWordsMatches(item, KeyWordsArray, LebelsArray);
+                if (ismatch)
+                {
+                    syndicationItemList.Add(item);
+                }
+            }
+        }
+        // Button to toggle item details
+        <button type="button" class="btn btn-primary" data-toggle="collapse" data-target="#demo_@rowCount">@rowCount -  @item.Title.Text  <b style="color:red"> @lebel</b> </button>
+        <div id="demo_@rowCount" class="collapse">
+            <p>Link: <a href="@item.Links.FirstOrDefault().Uri.AbsoluteUri">@item.Links.FirstOrDefault().Uri.AbsoluteUri</a></p> 
+            <p>Publish Date: @item.PublishDate.ToString()</p> 
+        </div>
+        <hr />
+    }
+
+    // Generating HTML body for email and sending email if syndicationItemList is not empty
+    string htmlBody = CommonFunctions.HtmlBody(syndicationItemList);
+    if (!String.IsNullOrEmpty(htmlBody))
+    {
+        await _emailkitManager.SendAsync(_settings.Value.ToEmail, null, _settings.Value.EmailSubject, htmlBody);
+    }
+}
